@@ -32,7 +32,8 @@ module Resque
       def perform_with_multi_job_forks(*args)
         perform_without_multi_job_forks(*args)
         
-        if @jobs_processed||= 0
+        @jobs_processed ||= 0
+        if @jobs_processed == 0
           @kill_fork_at = Time.now.to_i + (ENV['MINUTES_PER_FORK'].to_i * 60)
         end
         
@@ -42,6 +43,8 @@ module Resque
             while Time.now.to_i < @kill_fork_at
               if job = reserve
                 without_after_fork do
+                  working_on job
+                  procline "Processing #{job.queue} since #{Time.now.to_i} (for #{@kill_fork_at-Time.now.to_i} more secs)"
                   perform(job)
                 end
               else
