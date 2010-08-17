@@ -41,12 +41,10 @@ module Resque
         if @jobs_processed == 1
             while Time.now.to_i < @kill_fork_at
               if job = reserve
-                puts "pj: #{@jobs_processed}"
                 without_after_fork do
                   perform(job)
                 end
               else
-                puts "sleep"
                 sleep(1)
               end
             end
