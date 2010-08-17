@@ -21,13 +21,6 @@ module Resque
     attr_reader   :jobs_processed
 
     unless method_defined?(:perform_with_multi_job_forks)
-      def work_with_multi_job_forks(*args)
-        @jobs_processed ||= 0
-        @kill_fork_at ||= Time.now.to_i + (ENV['MINUTES_PER_FORK'].to_i * 60)
-        work_without_multi_job_forks(*args)
-      end
-      alias_method :work_without_multi_job_forks, :work
-      alias_method :work, :work_with_multi_job_forks
 
       def without_after_fork
         old_after_fork = Resque.after_fork
@@ -38,21 +31,26 @@ module Resque
 
       def perform_with_multi_job_forks(*args)
         perform_without_multi_job_forks(*args)
+        
+        if @jobs_processed||= 0
+          @kill_fork_at = Time.now.to_i + (ENV['MINUTES_PER_FORK'].to_i * 60)
+        end
+        
         @jobs_processed += 1
 
         if @jobs_processed == 1
-          
-          without_after_fork do
             while Time.now.to_i < @kill_fork_at
               if job = reserve
-                perform(job)
+                puts "pj: #{@jobs_processed}"
+                without_after_fork do
+                  perform(job)
+                end
               else
+                puts "sleep"
                 sleep(1)
               end
             end
-          end
-          @jobs_processed = nil
-          @kill_fork_at = nil
+            @jobs_processed = 0
         end
       end
       alias_method :perform_without_multi_job_forks, :perform
