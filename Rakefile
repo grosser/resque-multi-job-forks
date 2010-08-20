@@ -6,13 +6,12 @@ begin
   Jeweler::Tasks.new do |gem|
     gem.name = "resque-multi-job-forks"
     gem.version = "0.2.0"
-    gem.summary = %Q{Have your resque workers process more that one job}
-    gem.description = %Q{When your resque jobs are frequent and fast,
-      the overhead of forking and running your after_fork might get too big.}
+    gem.summary = %Q{Reduce Resque fork overheat by running multiple jobs in one fork}
+    gem.description = %Q{Reduce Resque fork overheat by running multiple jobs in one fork}
     gem.email = "mick@staugaard.com"
     gem.homepage = "http://github.com/staugaard/resque-multi-job-forks"
     gem.authors = ["Mick Staugaard"]
-    gem.add_dependency "resque", "< 1.8.0"
+    gem.add_dependency "resque", ">= 1.9.9"
   end
   Jeweler::GemcutterTasks.new
 rescue LoadError
