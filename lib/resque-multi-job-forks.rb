@@ -21,16 +21,6 @@ module Resque
     attr_reader :jobs_processed
 
     unless method_defined?(:perform_with_multi_job_forks)
-
-      def without_after_fork
-        old_after_fork = Resque.after_fork
-        Resque.after_fork = nil
-        yield
-      ensure
-        Resque.after_fork = old_after_fork
-      end
-
-
       # perform multiple jobs in on perform, its not perfect...
       # normal: working_on after_fork work processed
       # now: working_on after_fork work working_on work processed working_on work processed processed
@@ -43,16 +33,8 @@ module Resque
 
         while Time.now.to_i < @kill_fork_at
           if job = (initial_job || reserve)
-            procline "Processing #{job.queue} since #{Time.now.to_i} (for #{@kill_fork_at-Time.now.to_i} more secs)"
-            if initial_job
-              perform_without_multi_job_forks(job)
-              initial_job = nil
-            else
-              working_on job
-              without_after_fork{ perform_without_multi_job_forks(job) }
-              processed!
-            end
-            @jobs_processed += 1
+            perform_job_in_this_fork job, :normal_callbacks => initial_job
+            initial_job = nil
           else
             procline @paused ? "Paused" : "Waiting for #{@queues.join(',')}"
             sleep(1)
@@ -61,9 +43,30 @@ module Resque
 
         run_hook :before_child_exit, self
       end
-
       alias_method :perform_without_multi_job_forks, :perform
       alias_method :perform, :perform_with_multi_job_forks
+
+      private
+
+      def perform_job_in_this_fork(job, options)
+        procline "Processing #{job.queue} since #{Time.now.to_i} (for #{@kill_fork_at-Time.now.to_i} more secs)"
+        if options[:normal_callbacks]
+          perform_without_multi_job_forks(job)
+        else
+          working_on job
+          without_after_fork{ perform_without_multi_job_forks(job) }
+          processed!
+        end
+        @jobs_processed += 1
+      end
+
+      def without_after_fork
+        old_after_fork = Resque.after_fork
+        Resque.after_fork = nil
+        yield
+      ensure
+        Resque.after_fork = old_after_fork
+      end
     end
   end
 end
