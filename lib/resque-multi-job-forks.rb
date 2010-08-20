@@ -30,34 +30,36 @@ module Resque
         Resque.after_fork = old_after_fork
       end
 
-      def perform_with_multi_job_forks(*args)
-        @jobs_processed ||= 0
-        if @jobs_processed == 0
-          @kill_fork_at = Time.now.to_i + (ENV['MINUTES_PER_FORK'].to_i * 60)
-        end
 
-        perform_without_multi_job_forks(*args)
+      # perform multiple jobs in on perform, its not perfect...
+      # normal: working_on after_fork work processed
+      # now: working_on after_fork work working_on work processed working_on work processed processed
+      def perform_with_multi_job_forks(initial_job, *args)
+        seconds_to_run = ENV['MINUTES_PER_FORK'].to_i * 60
+        return perform_without_multi_job_forks(initial_job, *args) if seconds_to_run <= 0
 
-        @jobs_processed += 1
+        @jobs_processed = 0
+        @kill_fork_at = Time.now.to_i + seconds_to_run
 
-        if @jobs_processed == 1
-          while Time.now.to_i < @kill_fork_at
-            if job = reserve
-              without_after_fork do
-                working_on job
-                procline "Processing #{job.queue} since #{Time.now.to_i} (for #{@kill_fork_at-Time.now.to_i} more secs)"
-                perform(job)
-                processed!
-              end
+        while Time.now.to_i < @kill_fork_at
+          if job = (initial_job || reserve)
+            procline "Processing #{job.queue} since #{Time.now.to_i} (for #{@kill_fork_at-Time.now.to_i} more secs)"
+            if initial_job
+              perform_without_multi_job_forks(job)
+              initial_job = nil
             else
-              procline @paused ? "Paused" : "Waiting for #{@queues.join(',')}"
-              sleep(1)
+              working_on job
+              without_after_fork{ perform_without_multi_job_forks(job) }
+              processed!
             end
+            @jobs_processed += 1
+          else
+            procline @paused ? "Paused" : "Waiting for #{@queues.join(',')}"
+            sleep(1)
           end
-
-          run_hook :before_child_exit, self
-          @jobs_processed = 0
         end
+
+        run_hook :before_child_exit, self
       end
 
       alias_method :perform_without_multi_job_forks, :perform
