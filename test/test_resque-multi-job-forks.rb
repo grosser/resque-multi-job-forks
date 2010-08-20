@@ -22,7 +22,7 @@ class TestResqueMultiJobForks < Test::Unit::TestCase
   end
   
   def test_sequence_of_events
-    Resque.redis.flush_all
+    Resque.redis.flushall rescue Resque.redis.flush_all # one of these should work depending on your redis client 
     
     ENV['MINUTES_PER_FORK'] = '1'
 

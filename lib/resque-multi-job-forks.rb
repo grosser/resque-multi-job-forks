@@ -31,12 +31,12 @@ module Resque
       end
 
       def perform_with_multi_job_forks(*args)
-        perform_without_multi_job_forks(*args)
-
         @jobs_processed ||= 0
         if @jobs_processed == 0
           @kill_fork_at = Time.now.to_i + (ENV['MINUTES_PER_FORK'].to_i * 60)
         end
+
+        perform_without_multi_job_forks(*args)
 
         @jobs_processed += 1
 
