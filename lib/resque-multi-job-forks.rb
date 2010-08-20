@@ -55,7 +55,7 @@ module Resque
             end
           end
 
-          run_hook :before_child_exit
+          run_hook :before_child_exit, self
           @jobs_processed = 0
         end
       end
