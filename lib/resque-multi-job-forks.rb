@@ -18,7 +18,7 @@ module Resque
 
   class Worker
     attr_accessor :jobs_per_fork
-    attr_reader   :jobs_processed
+    attr_reader :jobs_processed
 
     unless method_defined?(:perform_with_multi_job_forks)
 
@@ -26,34 +26,40 @@ module Resque
         old_after_fork = Resque.after_fork
         Resque.after_fork = nil
         yield
+      ensure
         Resque.after_fork = old_after_fork
       end
 
       def perform_with_multi_job_forks(*args)
         perform_without_multi_job_forks(*args)
-        
+
         @jobs_processed ||= 0
         if @jobs_processed == 0
           @kill_fork_at = Time.now.to_i + (ENV['MINUTES_PER_FORK'].to_i * 60)
         end
-        
+
         @jobs_processed += 1
 
         if @jobs_processed == 1
-            while Time.now.to_i < @kill_fork_at
-              if job = reserve
-                without_after_fork do
-                  working_on job
-                  procline "Processing #{job.queue} since #{Time.now.to_i} (for #{@kill_fork_at-Time.now.to_i} more secs)"
-                  perform(job)
-                end
-              else
-                sleep(1)
+          while Time.now.to_i < @kill_fork_at
+            if job = reserve
+              without_after_fork do
+                working_on job
+                procline "Processing #{job.queue} since #{Time.now.to_i} (for #{@kill_fork_at-Time.now.to_i} more secs)"
+                perform(job)
+                processed!
               end
+            else
+              procline @paused ? "Paused" : "Waiting for #{@queues.join(',')}"
+              sleep(1)
             end
-            @jobs_processed = 0
+          end
+
+          run_hook :before_child_exit
+          @jobs_processed = 0
         end
       end
+
       alias_method :perform_without_multi_job_forks, :perform
       alias_method :perform, :perform_with_multi_job_forks
     end
